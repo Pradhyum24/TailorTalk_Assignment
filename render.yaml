@@ -2,16 +2,13 @@ services:
   - type: web
     name: tailor-backend
     env: python
-    buildCommand: pip install -r backend/requirements.txt
+    rootDir: backend   # ✅ This tells Render to run commands inside backend/
+    buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port 8000
-    envVars:
-      - key: GOOGLE_APPLICATION_CREDENTIALS
-        value: backend/credentials/credentials.json
-    rootDir: backend
 
   - type: web
     name: tailor-frontend
     env: python
-    buildCommand: pip install -r frontend/requirements.txt
+    rootDir: frontend   # ✅ This tells Render to run commands inside frontend/
+    buildCommand: pip install -r requirements.txt
     startCommand: streamlit run streamlit_app.py --server.port=8080 --server.enableCORS=false
-    rootDir: frontend
