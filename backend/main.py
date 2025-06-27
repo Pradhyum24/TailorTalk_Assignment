@@ -12,14 +12,14 @@ except Exception as e:
 
 @app.post("/chat")
 def chat(input: dict):
-    if agent is None:
-        return {"response": "⚠️ Agent failed to load. Check backend logs."}
-
     user_message = input["message"]
     state = conversation_state.copy()
     state["input"] = user_message
 
-    output = agent.invoke(state)
-    conversation_state.update(output)
-
-    return {"response": output.get("output")}
+    try:
+        output = agent.invoke(state)
+        conversation_state.update(output)
+        return {"response": output.get("output")}
+    except Exception as e:
+        print(f"❌ Agent error: {e}")
+        return {"error": str(e)}
