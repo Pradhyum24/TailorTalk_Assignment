@@ -1,36 +1,32 @@
 # backend/calendar_utils.py
 
 from googleapiclient.errors import HttpError
-import datetime
-import os
-import pickle
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
-from zoneinfo import ZoneInfo 
+from google.oauth2.credentials import Credentials
+from zoneinfo import ZoneInfo
+import datetime
+import os
+import json
+
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
+TOKEN_PATH = os.path.join("credentials", "token.json")
 
 def get_calendar_service():
     creds = None
-    token_path = "token.pickle"
-    creds_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "credentials", "credentials.json"))
 
-    if os.path.exists(token_path):
-        with open(token_path, "rb") as token:
-            creds = pickle.load(token)
+    # ✅ Load credentials from token.json (provided via Render Secret File)
+    if os.path.exists(TOKEN_PATH):
+        with open(TOKEN_PATH, "r") as token_file:
+            creds = Credentials.from_authorized_user_info(json.load(token_file), SCOPES)
+    else:
+        raise FileNotFoundError("❌ token.json not found. Please generate it locally and upload to Render Secret Files.")
 
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(creds_path, SCOPES)
-            creds = flow.run_local_server(port=0)
+    # ✅ Refresh if expired
+    if creds and creds.expired and creds.refresh_token:
+        creds.refresh(Request())
 
-        with open(token_path, "wb") as token:
-            pickle.dump(creds, token)
-
-    service = build("calendar", "v3", credentials=creds)
-    return service
+    return build("calendar", "v3", credentials=creds)
 
 def check_availability(start_time, end_time):
     service = get_calendar_service()
@@ -66,7 +62,6 @@ def check_availability(start_time, end_time):
     except HttpError as error:
         print("❌ Google Calendar API error:", error)
         return False
-
 
 def create_event(start_time, end_time, summary="Meeting with user"):
     service = get_calendar_service()
@@ -144,10 +139,6 @@ def delete_event(date_str, time_str, expected_name=None):
             return True
 
         print("⚠️ No matching event found.")
-        return False
-
-    except HttpError as error:
-        print("❌ Google Calendar API error during deletion:", error)
         return False
 
     except HttpError as error:
