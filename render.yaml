@@ -2,13 +2,13 @@ services:
   - type: web
     name: tailor-backend
     env: python
-    rootDir: backend   # ✅ This tells Render to run commands inside backend/
+    rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port 8000
 
   - type: web
     name: tailor-frontend
     env: python
-    rootDir: frontend   # ✅ This tells Render to run commands inside frontend/
+    rootDir: frontend
     buildCommand: pip install -r requirements.txt
     startCommand: streamlit run streamlit_app.py --server.port=8080 --server.enableCORS=false
