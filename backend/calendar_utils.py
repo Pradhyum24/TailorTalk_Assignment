@@ -10,7 +10,8 @@ import os
 import json
 
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
-TOKEN_PATH = os.path.join("credentials", "token.json")
+TOKEN_PATH = "/etc/secrets/token.json"
+
 
 def get_calendar_service():
     creds = None
