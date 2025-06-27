@@ -1,7 +1,6 @@
 import os
 import datetime
 import json
-import re
 from typing import TypedDict
 from zoneinfo import ZoneInfo
 
@@ -30,17 +29,6 @@ class AgentState(TypedDict, total=False):
     last_date: str
     last_time: str
 
-def safe_json_parse(text: str) -> dict:
-    try:
-        text = re.sub(r"(?<=\{|,)\s*([\w_]+)\s*:", r'"\1":', text)
-        text = text.replace("'", '"')
-        text = re.sub(r",\s*\}", "}", text)
-        text = re.sub(r",\s*\]", "]", text)
-        return json.loads(text)
-    except Exception as e:
-        print("❌ Still invalid JSON after fix:", text)
-        raise e
-
 def extract_intent(state: AgentState) -> AgentState:
     message = state["input"]
     print("🧠 Extracting intent for:", message)
@@ -54,7 +42,9 @@ def extract_intent(state: AgentState) -> AgentState:
                 "content": (
                     f"Today's date is {today}. Extract the user's intent from their message.\n"
                     "Valid intents: book_meeting, cancel_meeting, show_slots, greeting.\n"
-                    "- Respond ONLY in valid JSON: {intent, date (YYYY-MM-DD), time (HH:MM in 24h)}."
+                    "Respond ONLY with a valid JSON object like this:\n"
+                    '{"intent": "book_meeting", "date": "2025-06-28", "time": "13:30"}\n'
+                    "All keys and string values must be in double quotes. Do not add extra commentary or formatting."
                 )
             },
             {"role": "user", "content": message}
@@ -65,12 +55,12 @@ def extract_intent(state: AgentState) -> AgentState:
     print("📦 Raw response:", raw)
 
     try:
-        parsed = safe_json_parse(raw)
+        parsed = json.loads(raw)
         intent = parsed.get("intent", "unknown")
         date = parsed.get("date") or state.get("last_date")
         time = parsed.get("time") or state.get("last_time")
 
-        # Carry intent forward if date/time present
+        # Carry forward intent if context exists
         if intent in ["unknown", "greeting"]:
             if (date or time) and state.get("last_intent") in ["book_meeting", "cancel_meeting"]:
                 intent = state["last_intent"]
@@ -87,7 +77,13 @@ def extract_intent(state: AgentState) -> AgentState:
 
     except Exception as e:
         print("❌ Parse error:", e)
-        return {"input": message, "intent": "unknown"}
+        return {
+            "input": message,
+            "intent": "unknown",
+            "last_intent": state.get("last_intent"),
+            "last_date": state.get("last_date"),
+            "last_time": state.get("last_time")
+        }
 
 def handle_booking(state: AgentState) -> AgentState:
     date_str = state.get("date")
