@@ -2,6 +2,7 @@
 
 import streamlit as st
 import requests
+BACKEND_URL = "https://tailortalk-backend.onrender.com/chat"
 
 st.set_page_config(page_title="Assignment", page_icon="🧵")
 st.title("Book your meeting")
@@ -26,7 +27,7 @@ if user_input:
 
     # Send request to FastAPI backend
     try:
-        response = requests.post("http://localhost:8000/chat", json={"message": user_input})
+        response = requests.post(BACKEND_URL, json={"message": user_input})
         response_data = response.json()
         bot_reply = response_data.get("response", "❌ Something went wrong.")
     except Exception as e:
