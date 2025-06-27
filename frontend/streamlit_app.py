@@ -2,7 +2,7 @@
 
 import streamlit as st
 import requests
-BACKEND_URL = "https://tailortalk-backend.onrender.com/chat"
+BACKEND_URL = "https://tailortalk-assignment-1.onrender.com/"
 
 st.set_page_config(page_title="Assignment", page_icon="🧵")
 st.title("Book your meeting")
