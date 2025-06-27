@@ -3,8 +3,8 @@
 import streamlit as st
 import requests
 
-st.set_page_config(page_title="TailorTalk", page_icon="🧵")
-st.title(" Book your meeting")
+st.set_page_config(page_title="Assignment", page_icon="🧵")
+st.title("Book your meeting")
 
 # Session history
 if "chat_history" not in st.session_state:
