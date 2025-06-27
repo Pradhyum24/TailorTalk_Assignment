@@ -25,12 +25,10 @@ class AgentState(TypedDict, total=False):
     intent: str
     date: str
     time: str
-    name: str
     output: str
     last_intent: str
     last_date: str
     last_time: str
-    last_name: str
 
 def safe_json_parse(text: str) -> dict:
     try:
@@ -56,10 +54,7 @@ def extract_intent(state: AgentState) -> AgentState:
                 "content": (
                     f"Today's date is {today}. Extract the user's intent from their message.\n"
                     "Valid intents: book_meeting, cancel_meeting, show_slots, greeting.\n"
-                    "- If the message only contains a name or short follow-up (like 'Rahul', '8 PM', etc), "
-                    "leave intent as 'unknown' but try to extract date/time/name from it.\n"
-                    "- If a name is mentioned like 'My name is Rahul' or 'for Rahul', extract name='Rahul'.\n"
-                    "Respond ONLY in valid JSON: {intent, date (YYYY-MM-DD), time (HH:MM in 24h), name}."
+                    "- Respond ONLY in valid JSON: {intent, date (YYYY-MM-DD), time (HH:MM in 24h)}."
                 )
             },
             {"role": "user", "content": message}
@@ -74,24 +69,20 @@ def extract_intent(state: AgentState) -> AgentState:
         intent = parsed.get("intent", "unknown")
         date = parsed.get("date") or state.get("last_date")
         time = parsed.get("time") or state.get("last_time")
-        name = parsed.get("name") or state.get("last_name")
 
-        if intent == "unknown":
-            if state.get("last_intent") == "book_meeting" and (date or time or name):
-                intent = "book_meeting"
-            elif state.get("last_intent") == "cancel_meeting" and (date or time or name):
-                intent = "cancel_meeting"
+        # Carry intent forward if date/time present
+        if intent in ["unknown", "greeting"]:
+            if (date or time) and state.get("last_intent") in ["book_meeting", "cancel_meeting"]:
+                intent = state["last_intent"]
 
         return {
             "input": message,
             "intent": intent,
             "date": date,
             "time": time,
-            "name": name,
             "last_intent": intent,
             "last_date": date,
-            "last_time": time,
-            "last_name": name
+            "last_time": time
         }
 
     except Exception as e:
@@ -101,21 +92,17 @@ def extract_intent(state: AgentState) -> AgentState:
 def handle_booking(state: AgentState) -> AgentState:
     date_str = state.get("date")
     time_str = state.get("time")
-    name = state.get("name") or state.get("last_name")
 
-    if not name or name.lower() == "unknown":
-        return {"output": "🙋 May I have your name to confirm the booking?"}
     if not date_str or date_str.lower() == "unknown":
         return {"output": "⚠️ Please provide a valid date to book."}
     if not time_str or time_str.lower() == "unknown":
-        return {"output": f"🕐 Hi {name}, what time would you like to book on {date_str}?"}
+        return {"output": f"🕐 What time would you like to book on {date_str}?"}
 
-    # Safely parse date/time
     tz = ZoneInfo("Asia/Kolkata")
     try:
         start = datetime.datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M").replace(tzinfo=tz)
     except ValueError:
-        return {"output": "⚠️ Please provide time in HH:MM format (e.g. 14:30 for 2:30 PM)."}
+        return {"output": "⚠️ Time must be in HH:MM format (e.g. 14:30 for 2:30 PM)."}
 
     end = start + datetime.timedelta(minutes=30)
     now = datetime.datetime.now(tz)
@@ -125,7 +112,7 @@ def handle_booking(state: AgentState) -> AgentState:
     if start.minute not in [0, 30]:
         return {"output": "⚠️ Appointments must start on the hour or half-hour (e.g., 10:00, 10:30)."}
 
-    print(f"📅 Requested booking: {start} to {end} by {name}")
+    print(f"📅 Booking from {start} to {end}")
 
     if not check_availability(start, end):
         suggestions = suggest_alternate_slots(start)
@@ -134,12 +121,10 @@ def handle_booking(state: AgentState) -> AgentState:
         else:
             return {"output": "❌ That time is booked and no nearby slots are free."}
 
-    link = create_event(start, end, summary=f"Meeting with {name}")
+    create_event(start, end, summary="Appointment")
     return {
-        "output": f"✅ Appointment booked for {name}! Here’s your link: {link}",
-        "last_name": name
+        "output": f"✅ Appointment booked on {date_str} at {time_str}."
     }
-
 
 def handle_show_slots(state: AgentState) -> AgentState:
     date_str = state.get("date")
@@ -154,18 +139,15 @@ def handle_show_slots(state: AgentState) -> AgentState:
 def handle_cancellation(state: AgentState) -> AgentState:
     date_str = state.get("date") or state.get("last_date")
     time_str = state.get("time") or state.get("last_time")
-    name = state.get("name") or state.get("last_name")
 
     if not date_str or not time_str:
         return {"output": "⚠️ Please provide the date and time to cancel."}
-    if not name or name.lower() == "unknown":
-        return {"output": "🙋 Please provide the name used when booking."}
 
-    success = delete_event(date_str, time_str, expected_name=name)
+    success = delete_event(date_str, time_str)
     if success:
-        return {"output": f"✅ Appointment at {time_str} on {date_str} was cancelled for {name}."}
+        return {"output": f"✅ Appointment at {time_str} on {date_str} was cancelled."}
     else:
-        return {"output": f"❌ No appointment found under {name} at that time."}
+        return {"output": f"❌ No appointment found at that time."}
 
 def fallback(state: AgentState) -> AgentState:
     input_text = state.get("input", "").lower()
@@ -176,7 +158,20 @@ def fallback(state: AgentState) -> AgentState:
         return {"output": "👋 Hello! I can help you book, cancel, or show available appointment slots."}
 
     if last_intent == "book_meeting":
-        return handle_booking(state)
+        date = state.get("date") or state.get("last_date")
+        time = state.get("time") or state.get("last_time")
+
+        if not date:
+            return {"output": "📅 Please provide the date you'd like to book."}
+        if not time:
+            return {"output": f"🕐 What time would you like to book on {date}?"}
+
+        return handle_booking({
+            **state,
+            "date": date,
+            "time": time
+        })
+
     if last_intent == "cancel_meeting":
         return handle_cancellation(state)
 
